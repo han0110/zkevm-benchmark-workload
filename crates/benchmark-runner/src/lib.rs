@@ -35,23 +35,24 @@ pub enum Action {
 }
 
 /// Executes benchmarks for a given guest program type and zkVM
-pub fn run_benchmark<M>(
-    zkvm: Box<dyn zkVM + Sync>,
+pub fn run_benchmark<V, M>(
+    zkvm: &V,
     config: &RunConfig,
     inputs: Vec<GuestInput<M>>,
 ) -> anyhow::Result<()>
 where
+    V: zkVM,
     M: GuestInputMetadata,
 {
     HardwareInfo::detect().to_path(config.output_folder.join("hardware.json"))?;
     match config.action {
         Action::Execute => inputs
             .par_iter()
-            .try_for_each(|input| process_input(&zkvm, input, config))?,
+            .try_for_each(|input| process_input(zkvm, input, config))?,
 
         Action::Prove => inputs
             .iter()
-            .try_for_each(|input| process_input(&zkvm, input, config))?,
+            .try_for_each(|input| process_input(zkvm, input, config))?,
     }
 
     Ok(())
@@ -60,7 +61,7 @@ where
 /// Processes a single input through the zkVM
 fn process_input<V, M>(zkvm: &V, input: &GuestInput<M>, config: &RunConfig) -> anyhow::Result<()>
 where
-    V: zkVM + Sync,
+    V: zkVM,
     M: GuestInputMetadata,
 {
     let zkvm_name = format!("{}-v{}", zkvm.name(), zkvm.sdk_version());
