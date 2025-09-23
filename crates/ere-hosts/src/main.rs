@@ -4,7 +4,7 @@
 
 use benchmark_runner::{
     block_encoding_length_program, empty_program,
-    runner::{Action, RunConfig, get_zkvm_instances, run_benchmark},
+    runner::{Action, RunConfig, get_zkvm_risc0, run_benchmark_risc0},
     stateless_validator::{self},
 };
 use clap::{Parser, Subcommand, ValueEnum};
@@ -178,30 +178,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             )?;
             let guest_relative = Path::new(execution_client.guest_rel_path());
             let apply_patches = matches!(execution_client, ExecutionClient::Reth);
-            let zkvms = get_zkvm_instances(
-                &cli.zkvms,
-                &workspace_dir,
-                guest_relative,
-                resource,
-                apply_patches,
-            )?;
-            for zkvm in zkvms {
-                run_benchmark(&zkvm, &config, guest_io.clone())?;
-            }
+            let zkvm = get_zkvm_risc0(&workspace_dir, guest_relative, resource, apply_patches)?;
+            run_benchmark_risc0(&zkvm, &config, guest_io)?;
         }
         GuestProgramCommand::EmptyProgram => {
             info!("Running empty-program benchmarks");
             let guest_io = empty_program::empty_program_input();
-            let zkvms = get_zkvm_instances(
-                &cli.zkvms,
-                &workspace_dir,
-                Path::new("empty-program"),
-                resource,
-                true,
-            )?;
-            for zkvm in zkvms {
-                run_benchmark(&zkvm, &config, vec![guest_io.clone()])?;
-            }
+            let zkvm = get_zkvm_risc0(&workspace_dir, Path::new("empty-program"), resource, true)?;
+            run_benchmark_risc0(&zkvm, &config, vec![guest_io])?;
         }
         GuestProgramCommand::BlockEncodingLength {
             input_folder,
@@ -219,16 +203,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 *loop_count,
                 format.clone().into(),
             )?;
-            let zkvms = get_zkvm_instances(
-                &cli.zkvms,
+            let zkvm = get_zkvm_risc0(
                 &workspace_dir,
                 Path::new("block-encoding-length"),
                 resource,
                 true,
             )?;
-            for zkvm in zkvms {
-                run_benchmark(&zkvm, &config, guest_io.clone())?;
-            }
+            run_benchmark_risc0(&zkvm, &config, guest_io)?;
         }
     }
 

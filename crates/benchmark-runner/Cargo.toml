@@ -10,6 +10,7 @@ zkvm-interface.workspace = true
 guest-libs.workspace = true
 
 ere-dockerized.workspace = true
+ere-risc0.workspace = true
 
 alloy-rlp.workspace = true
 alloy-eips.workspace = true

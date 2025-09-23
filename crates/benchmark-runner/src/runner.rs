@@ -2,6 +2,7 @@
 
 use anyhow::{anyhow, Context, Result};
 use ere_dockerized::{EreDockerizedCompiler, EreDockerizedzkVM, ErezkVM};
+use ere_risc0::{EreRisc0, RV32_IM_RISC0_ZKVM_ELF};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -47,11 +48,35 @@ where
     match config.action {
         Action::Execute => inputs
             .par_iter()
-            .try_for_each(|input| process_input(ere_zkvm, input, config))?,
+            .try_for_each(|input| process_input(&ere_zkvm, ere_zkvm.zkvm(), input, config))?,
 
         Action::Prove => inputs
             .iter()
-            .try_for_each(|input| process_input(ere_zkvm, input, config))?,
+            .try_for_each(|input| process_input(&ere_zkvm, ere_zkvm.zkvm(), input, config))?,
+    }
+
+    Ok(())
+}
+
+/// Executes benchmarks for a given guest program type and zkVM
+pub fn run_benchmark_risc0<M, OV>(
+    zkvm: &EreRisc0,
+    config: &RunConfig,
+    inputs: Vec<GuestIO<M, OV>>,
+) -> Result<()>
+where
+    M: GuestMetadata,
+    OV: OutputVerifier,
+{
+    HardwareInfo::detect().to_path(config.output_folder.join("hardware.json"))?;
+    match config.action {
+        Action::Execute => inputs
+            .par_iter()
+            .try_for_each(|input| process_input(&zkvm, ErezkVM::Risc0, input, config))?,
+
+        Action::Prove => inputs
+            .iter()
+            .try_for_each(|input| process_input(&zkvm, ErezkVM::Risc0, input, config))?,
     }
 
     Ok(())
@@ -59,7 +84,8 @@ where
 
 /// Processes a single input through the zkVM
 fn process_input<M, OV>(
-    zkvm: &EreDockerizedzkVM,
+    zkvm: &impl zkVM,
+    zkvm_kind: ErezkVM,
     io: &GuestIO<M, OV>,
     config: &RunConfig,
 ) -> Result<()>
@@ -83,7 +109,7 @@ where
             let run = panic::catch_unwind(panic::AssertUnwindSafe(|| zkvm.execute(&io.input)));
             let execution = match run {
                 Ok(Ok((public_values, report))) => {
-                    verify_public_output(&io.name, zkvm.zkvm(), &public_values, &io.output)
+                    verify_public_output(&io.name, zkvm_kind, &public_values, &io.output)
                         .context("Failed to verify public output from execution")?;
 
                     ExecutionMetrics::Success {
@@ -105,11 +131,11 @@ where
             let run = panic::catch_unwind(panic::AssertUnwindSafe(|| zkvm.prove(&io.input)));
             let proving = match run {
                 Ok(Ok((public_values, proof, report))) => {
-                    verify_public_output(&io.name, zkvm.zkvm(), &public_values, &io.output)
+                    verify_public_output(&io.name, zkvm_kind, &public_values, &io.output)
                         .context("Failed to verify public output from proof")?;
                     let verif_public_values =
                         zkvm.verify(&proof).context("Failed to verify proof")?;
-                    verify_public_output(&io.name, zkvm.zkvm(), &verif_public_values, &io.output)
+                    verify_public_output(&io.name, zkvm_kind, &verif_public_values, &io.output)
                         .context("Failed to verify public output from proof verification")?;
 
                     ProvingMetrics::Success {
@@ -168,6 +194,22 @@ pub fn get_zkvm_instances(
         instances.push(EreDockerizedzkVM::new(*zkvm, program, resource.clone())?);
     }
     Ok(instances)
+}
+
+/// Creates the Risc0 zkVMs configured for the guest program and resources.
+pub fn get_zkvm_risc0(
+    workspace_dir: &Path,
+    guest_relative: &Path,
+    resource: ProverResourceType,
+    apply_patches: bool,
+) -> Result<EreRisc0, Box<dyn std::error::Error>> {
+    let zkvm_kind = ErezkVM::Risc0;
+    if apply_patches {
+        run_cargo_patch_command(zkvm_kind.as_str(), workspace_dir)?;
+    }
+    let program = RV32_IM_RISC0_ZKVM_ELF
+        .compile(&workspace_dir.join(guest_relative).join(zkvm_kind.as_str()))?;
+    Ok(EreRisc0::new(program, resource)?)
 }
 
 /// Patches the precompiles for a specific zkvm

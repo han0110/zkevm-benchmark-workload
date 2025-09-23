@@ -109,6 +109,7 @@ guest-libs = { path = "ere-guests/libs" }
 
 zkvm-interface = { git = "https://github.com/eth-applied-research-group/ere", tag = "v0.0.12", package = "zkvm-interface" }
 ere-dockerized = { git = "https://github.com/eth-applied-research-group/ere", tag = "v0.0.12", package = "ere-dockerized" }
+ere-risc0 = { git = "https://github.com/eth-applied-research-group/ere", tag = "v0.0.12", package = "ere-risc0" }
 
 # branch is kw/zkevm-benchmark-workload-repo
 # NOTE: We are using a branch of a branch that has not yet been merged into master.
